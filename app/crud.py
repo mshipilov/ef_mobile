@@ -51,10 +51,12 @@ def get_user(email):
     return user
 
 
-def create_user(user_in: UserCreate):
-    user_data = user_in.model_dump()
-    hashed_pass = encrypt_pass(user_data['pass'])
+def create_user(user_data: dict):
+    hashed_pass = encrypt_pass(user_data.pop('pswd'))
     new_user = User(**user_data, hashed_password=hashed_pass) 
+    session.add(new_user)
+    session.commit()
+    session.refresh(new_user)
     return new_user
 
 
@@ -73,6 +75,7 @@ def initial_db_population():
             role=admin_role
         )
         simple_user = User(
+            abc='test',
             name='Fedor',
             email="user@example.com", 
             hashed_password="secure_user_hash", 

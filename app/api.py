@@ -30,7 +30,7 @@ def get_profile(
 
 @app.post("/profile")
 def create_profile(user_in: UserCreate):
-    user = create_user(user_in)
+    user = create_user(user_in.model_dump())
     return {'message': f'You registered new User with id {user.id}'}
 
 @app.patch("/profile")

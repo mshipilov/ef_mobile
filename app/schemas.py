@@ -4,7 +4,7 @@ from pydantic import BaseModel, EmailStr, model_validator, Field
 class UserCreate(BaseModel):
     name: str
     email: EmailStr  # Validates email format automatically
-    pswd: str = Field(exclude=True) 
+    pswd: str
     repeat_pswd: str = Field(exclude=True) 
     role_id: int
 
