@@ -1,11 +1,10 @@
 from fastapi import FastAPI, Depends
+from fastapi import HTTPException
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
-from .permission_service import PermissionChecker
 from .models import User
-from .schemas import UserCreate
-from .tokenization import create_token
-from .crud import create_user
+from .schemas import UserToken, UserCreate, UserRead, UserUpdate, UserDelete
+from .crud import create_token, create_user, read_user, update_user, delete_user
 
 
 app = FastAPI()
@@ -16,36 +15,42 @@ ALGORITHM = "HS256"
 
 
 @app.post("/token")
-def login_for_access_token(form_data):
-    token = create_token(user_id)
+def login(user_data: UserToken):
+    token = create_token(user_data) 
+    return {"access_token": token, "token_type": "bearer"}
 
 
 
 @app.get("/profile")
-def get_profile(
-    session: Session = Depends(get_session),
-    current_user: User = Depends(PermissionChecker(resource="orders", action="read"))
-):
+def get_profile(user_read: UserRead):
+
     pass
 
 @app.post("/profile")
 def create_profile(user_in: UserCreate):
     user = create_user(user_in.model_dump())
-    return {'message': f'You registered new User with id {user.id}'}
+    if not user:
+        raise HTTPException(status_code=400, detail="Email already registered")
+    return {'message': f'You registered new User with id {user.id}'} 
 
 @app.patch("/profile")
-def update_profile(
-    current_user: User = Depends(PermissionChecker(resource="orders", action="create"))
-):
-    return {"message": "Заказ успешно создан"}
+def update_profile(user_upd: UserUpdate):
+    updated_user = update_user(user_upd.model_dump(exclude_unset=True))  # exclude_unset=True means delete keys with None values
+    if not updated_user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    return {"message": f"User with id {updated_user.id} updated successfully"}
 
 @app.delete("/profile")
-def delete_profile(
-    current_user: User = Depends(PermissionChecker(resource="orders", action="delete"))
-):
-    return {"message": "Заказ удален"}
+def delete_profile(user_del: UserDelete):
+    user_id = user_del.id
+    result = delete_user(user_id)
+    if not result:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    return {"message": f"User with id {user_id} deleted successfully"}
 
-# frontend needs role_id for each role to create new user
-@app.get("/role")
-def get_roles():
-    pass
+# # frontend needs role_id for each role to create new user
+# @app.get("/role")
+# def get_roles():
+#     pass

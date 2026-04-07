@@ -4,3 +4,4 @@ dotenv==0.9.9
 bcrypt==5.0.0
 pyjwt==2.12.1
 pydantic==2.12.5
+fastapi[standard]==0.135.3

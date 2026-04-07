@@ -4,9 +4,11 @@ import platform
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 from sqlalchemy import select, update
+from sqlalchemy.exc import IntegrityError
 from .schemas import UserCreate
 from .models import Base, User, Role, BusinessElement, AccessRolesRule
 from .encryption import encrypt_pass, check_encrypred_pass
+from .tokenization import encode_token
 
 load_dotenv() 
 
@@ -18,6 +20,8 @@ DB_NAME = os.getenv('POSTGRES_DB_NAME')
 DB_HOST='localhost' if platform.system() == 'Windows' else 'pgdatabase'
 DB_PORT=5432
 
+UNIQUE_VIOLATION = "23505"  # pg error code
+
 
 database_url = f'postgresql+psycopg2://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/{DB_NAME}'
 engine = create_engine(database_url, echo=True)
@@ -26,38 +30,80 @@ session = Session(engine)
 # create tables if not exist
 Base.metadata.create_all(engine)
 
-def authenticate_user(fake_db, username: str, password: str):
-    user = get_user(fake_db, username)
+def create_token(user_data):
+    user_id = user_data['user_id']
+    user = read_user(user_id)
     if not user:
-        verify_password(password, DUMMY_HASH)
+        return None
+    if not check_encrypred_pass(user_data['user_pswd'], user.hashed_password):
         return False
-    if not verify_password(password, user.hashed_password):
-        return False
-    return user
+    token = encode_token(user_id)
+    
+    return token
 
 
-def get_role(name):
-    stmt = select(Role).where(Role.name == name)
-    role = session.execute(stmt).scalars().first()
-    return role
+
 
 def create_role(name):
     return Role(name=name)
 
 
-def get_user(email):
-    stmt = select(User).where(User.email == email)
-    user = session.execute(stmt).scalars().first()
-    return user
+def read_role(name):
+    stmt = select(Role).where(Role.name == name)
+    role = session.execute(stmt).scalars().first()
+    return role
 
 
 def create_user(user_data: dict):
     hashed_pass = encrypt_pass(user_data.pop('pswd'))
     new_user = User(**user_data, hashed_password=hashed_pass) 
     session.add(new_user)
-    session.commit()
+    try:
+        session.commit()
+    except IntegrityError as e:
+        pg_code = getattr(e.orig, "pgcode")
+        # user already exists
+        if pg_code == UNIQUE_VIOLATION:
+            session.rollback()
+            return None
+        # for other issues re-throw original error
+        raise
     session.refresh(new_user)
     return new_user
+
+
+def read_user(user_id):
+    stmt = select(User).where(User.id == user_id)
+    user = session.execute(stmt).scalars().first()
+    return user
+
+
+def update_user(user_data: dict):
+    user_id = user_data['id']
+    user = read_user(user_id)
+    if not user:
+        return None
+
+    if "pswd" in user_data:
+        password = user_data.pop("pswd")
+        user.hashed_password = encrypt_pass(password)
+    
+    for field, value in user_data.items():
+        setattr(user, field, value)
+    session.add(user)
+    session.commit()
+    session.refresh(user)
+    return user
+
+
+def delete_user(user_id):
+    user = read_user(user_id)
+    if not user:
+        return None
+    stmt = update(User).where(User.id == user_id).values(is_active=False)
+    session.execute(stmt)
+    session.commit()
+    return True
 
 
 def initial_db_population():
@@ -75,7 +121,6 @@ def initial_db_population():
             role=admin_role
         )
         simple_user = User(
-            abc='test',
             name='Fedor',
             email="user@example.com", 
             hashed_password="secure_user_hash", 

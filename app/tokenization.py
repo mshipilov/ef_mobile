@@ -12,7 +12,7 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 30
 # looks like I don't need to store tokens in DB
 # I can put all data (user_id, exp) to payload
 
-def create_token(user_id: int) -> str:
+def encode_token(user_id: int) -> str:
     expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     # The "sub" (subject) claim is standard for the user identifier
     payload = {"sub": str(user_id), "exp": expire}

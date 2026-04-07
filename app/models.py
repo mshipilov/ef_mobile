@@ -12,7 +12,7 @@ class User(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(60))
     email: Mapped[str] = mapped_column(unique=True, index=True)
-    hashed_password: Mapped[str] = mapped_column(String(60))
+    hashed_password: Mapped[str] = mapped_column(String(128))
     is_active: Mapped[bool] = mapped_column(default=True)
     role_id: Mapped[int] = mapped_column(ForeignKey("role.id"))
     
