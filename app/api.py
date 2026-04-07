@@ -5,11 +5,13 @@ from sqlalchemy.orm import Session
 from .models import User
 from .schemas import UserToken, UserCreate, UserRead, UserUpdate, UserDelete
 from .crud import create_token, create_user, read_user, update_user, delete_user
-
+from .tokenization import get_user_id_from_token
 
 app = FastAPI()
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
+
+
+
 SECRET_KEY = "your_server_private_key"
 ALGORITHM = "HS256"
 
@@ -22,7 +24,9 @@ def login(user_data: UserToken):
 
 
 @app.get("/profile")
-def get_profile(user_read: UserRead):
+def get_profile(user_read: UserRead, current_user_id: int = Depends(get_user_id_from_token)):
+    print(user_read)
+    print(current_user_id)
 
     pass
 
