@@ -17,6 +17,7 @@ class User(Base):
     role_id: Mapped[int] = mapped_column(ForeignKey("role.id"))
     
     role: Mapped["Role"] = relationship(back_populates="users")
+    orders: Mapped[list["Order"]] = relationship(back_populates="user")
     
 
     def __repr__(self):
@@ -56,6 +57,16 @@ class AccessRolesRule(Base):
     business_element: Mapped["BusinessElement"] = relationship(back_populates="access_roles_rules")
 
 
+class Order(Base):
+    __tablename__ = "order"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    description: Mapped[str] = mapped_column(String(128))
+    owner_id: Mapped[int] = mapped_column(ForeignKey("user.id"))
+
+    user: Mapped["User"] = relationship(back_populates="orders")
+    
+    def __repr__(self):
+        return f'Order with description {self.description}'
    
 
 

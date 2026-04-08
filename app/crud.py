@@ -5,7 +5,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
-from .schemas import UserCreate
+from fastapi import HTTPException
 from .models import Base, User, Role, BusinessElement, AccessRolesRule
 from .encryption import encrypt_pass, check_encrypred_pass
 from .tokenization import encode_token
@@ -30,16 +30,16 @@ session = Session(engine)
 # create tables if not exist
 Base.metadata.create_all(engine)
 
-def create_token(user_data):
-    user_id = user_data['user_id']
-    user = read_user(user_id)
-    if not user:
-        return None
-    if not check_encrypred_pass(user_data['user_pswd'], user.hashed_password):
-        return False
-    token = encode_token(user_id)
+# def create_token(user_data):
+#     user_id = user_data['user_id']
+#     user = read_user(user_id=user_id)
+#     if not user:
+#         return None
+#     if not check_encrypred_pass(user_data['user_pswd'], user.hashed_password):
+#         return False
+#     token = encode_token(user_id)
     
-    return token
+#     return token
 
 
 
@@ -65,24 +65,32 @@ def create_user(user_data: dict):
         # user already exists
         if pg_code == UNIQUE_VIOLATION:
             session.rollback()
-            return None
+            raise HTTPException(status_code=400, detail="Email already registered")
         # for other issues re-throw original error
         raise
     session.refresh(new_user)
     return new_user
 
 
-def read_user(user_id):
-    stmt = select(User).where(User.id == user_id)
-    user = session.execute(stmt).scalars().first()
-    return user
+def read_user(*, user_id=None, email=None):
+    stmt = select(User)
+    
+    if user_id:
+        stmt = stmt.where(User.id == user_id)
+    elif email:
+        stmt = stmt.where(User.email == email)
+    else:
+        return None
+
+    return session.execute(stmt).scalars().first()
+    
 
 
 def update_user(user_data: dict):
     user_id = user_data['id']
-    user = read_user(user_id)
+    user = read_user(user_id=user_id)
     if not user:
-        return None
+        raise HTTPException(status_code=404, detail="User not found")
 
     if "pswd" in user_data:
         password = user_data.pop("pswd")
@@ -97,9 +105,9 @@ def update_user(user_data: dict):
 
 
 def delete_user(user_id):
-    user = read_user(user_id)
+    user = read_user(user_id=user_id)
     if not user:
-        return None
+        raise HTTPException(status_code=404, detail="User not found")
     stmt = update(User).where(User.id == user_id).values(is_active=False)
     session.execute(stmt)
     session.commit()
@@ -130,11 +138,12 @@ def initial_db_population():
 
         # create Business Elements
         user_be = BusinessElement(name="User Management")
-        session.add(user_be)
+        permission_be = BusinessElement(name="Permissions Management")
+        session.add([user_be, permission_be])
         session.flush()
 
         # create Access Rules (Write Access for Admin on User Management)
-        user_write_rule = AccessRolesRule(
+        user_rule = AccessRolesRule(
             role=user_role,
             business_element=user_be,
             read_permission=True,
@@ -142,7 +151,7 @@ def initial_db_population():
             update_permission=True,
             delete_permission=True,
         )
-        admin_write_rule = AccessRolesRule(
+        admin_rule = AccessRolesRule(
             role=admin_role,
             business_element=user_be,
             read_permission=True,
@@ -153,7 +162,8 @@ def initial_db_population():
             update_all_permission=True,
             delete_all_permission=True,
         )
-        session.add_all([user_write_rule, admin_write_rule])
+        
+        session.add_all([user_rule, admin_rule])
 
         # Final Commit
         session.commit()

@@ -27,31 +27,9 @@ def decode_token(token: str) -> dict:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         return payload
     except jwt.ExpiredSignatureError:
-        return "Token has expired"
+        raise HTTPException(status_code=401, detail="Token expired")
     except jwt.InvalidTokenError:
-        return "Invalid token"
+        raise HTTPException(status_code=401, detail="Token is invalid")
     
-# OAuth2PasswordBearer is used to extract the token from the request header
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
-# Если по входящему запросу не удается определить залогиненного пользователя, выдается ошибка 401. 
-# Если пользователь определен, но запрашиваемый ресурс ему не доступен 403 ошибка — Forbidden. 
-def get_user_id_from_token(token: str = Depends(oauth2_scheme)):
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="User not found",
-    )
-    token_expired_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Token expired",
-    )
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        user_id = payload.get("sub")
-        if user_id is None:
-            raise credentials_exception
-        return int(user_id)
-    except jwt.ExpiredSignatureError:
-        raise token_expired_exception
-    except jwt.InvalidTokenError:
-        raise credentials_exception
+
