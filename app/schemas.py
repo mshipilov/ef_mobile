@@ -28,3 +28,20 @@ class UserCreateAdmin(UserCreateBase):
 class UserUpdateAdmin(UserUpdateBase):
     role_id: Optional[int] = None  # Admins can explicitly set the role
     
+
+class OrderCreate(BaseModel):
+    description: str
+
+class RoleCreate(BaseModel):
+    name: str
+
+class AccessRuleCreate(BaseModel):
+    role_id: int
+    business_element_id: int
+    read_permission: Optional[bool] = None
+    read_all_permission: Optional[bool] = None
+    create_permission: Optional[bool] = None
+    update_permission: Optional[bool] = None
+    update_all_permission: Optional[bool] = None
+    delete_permission: Optional[bool] = None
+    delete_all_permission: Optional[bool] = None

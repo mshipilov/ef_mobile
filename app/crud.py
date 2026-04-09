@@ -8,7 +8,6 @@ from sqlalchemy.exc import IntegrityError
 from fastapi import HTTPException
 from .models import Base, User, Order, Role, BusinessElement, AccessRolesRule
 from .encryption import encrypt_pass, check_encrypred_pass
-from .tokenization import encode_token
 
 load_dotenv() 
 
@@ -30,29 +29,39 @@ session = Session(engine)
 # create tables if not exist
 Base.metadata.create_all(engine)
 
-# def create_token(user_data):
-#     user_id = user_data['user_id']
-#     user = read_user(user_id=user_id)
-#     if not user:
-#         return None
-#     if not check_encrypred_pass(user_data['user_pswd'], user.hashed_password):
-#         return False
-#     token = encode_token(user_id)
-    
-#     return token
+def create_role(user_data: dict):
+    new_role = Role(**user_data)
+    session.add(new_role)
+    try:
+        session.commit()
+    except IntegrityError as e:
+        pg_code = getattr(e.orig, "pgcode")
+        if pg_code == UNIQUE_VIOLATION:
+            session.rollback()
+            raise HTTPException(status_code=400, detail=f"Role with data {user_data} already registered")
+        # for other issues re-throw original error
+        raise
+    session.refresh(new_role)
+    return new_role
 
-
-
-
-def create_role(name):
-    return Role(name=name)
-
-
-def read_role(name):
-    stmt = select(Role).where(Role.name == name)
+def read_role(role_id):
+    stmt = select(Role).where(Role.id == role_id)
     role = session.execute(stmt).scalars().first()
     return role
 
+def delete_role(role_id):
+    role = read_role(role_id)
+    if not role:
+        raise HTTPException(status_code=404, detail="Role not found")
+    
+    try:
+        stmt = delete(Role).where(Role.id == role_id)
+        session.execute(stmt)
+        session.commit()
+    except IntegrityError:
+        session.rollback()
+        raise HTTPException(status_code=400, detail=f"Cannot delete. Foreign key violation.")
+    return True
 
 def create_user(user_data: dict):
     hashed_pass = encrypt_pass(user_data.pop('pswd'))
@@ -85,7 +94,6 @@ def read_user(*, user_id=None, email=None):
     return session.execute(stmt).scalars().first()
     
 
-
 def update_user(user_data: dict):
     user_id = user_data['id']
     user = read_user(user_id=user_id)
@@ -103,7 +111,7 @@ def update_user(user_data: dict):
     session.refresh(user)
     return user
 
-
+# soft delete here
 def delete_user(user_id):
     user = read_user(user_id=user_id)
     if not user:
@@ -114,20 +122,24 @@ def delete_user(user_id):
     return True
 
 
-def create_order(description: str, owner_id: int):
-    return Order(description=description, owner_id=owner_id)
+def create_order(user_data: dict):
+    new_order = Order(**user_data)
+    session.add(new_order)
+    session.commit()
+    session.refresh(new_order)
+    return new_order
 
 def read_order(order_id):
     stmt = select(Order).where(Order.id == order_id)
     order = session.execute(stmt).scalars().first()
     return order
 
-def update_order(order_data: dict):
-    order_id = order_data['id']
+def update_order(user_data: dict):
+    order_id = user_data['id']
     order = read_order(order_id)
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
-    for field, value in order_data.items():
+    for field, value in user_data.items():
         setattr(order, field, value)
     session.add(order)
     session.commit()
@@ -144,7 +156,44 @@ def delete_order(order_id):
     return True
 
 
+def create_access_rule(user_data: dict):
+    new_access_rule = AccessRolesRule(**user_data)
+    session.add(new_access_rule)
+    session.commit()
+    session.refresh(new_access_rule)
+    return new_access_rule
 
+def read_access_rule(access_rule_id):
+    stmt = select(AccessRolesRule).where(AccessRolesRule.id == access_rule_id)
+    access_rule = session.execute(stmt).scalars().first()
+    return access_rule
+
+def update_access_rule(user_data: dict):
+    access_rule_id = user_data['id']
+    access_rule = read_access_rule(access_rule_id)
+    if not access_rule:
+        raise HTTPException(status_code=404, detail="Access rule not found")
+    for field, value in user_data.items():
+        setattr(access_rule, field, value)
+    session.add(access_rule)
+    session.commit()
+    session.refresh(access_rule)
+    return access_rule
+
+
+def delete_access_rule(access_rule_id):
+    access_rule = read_access_rule(access_rule_id)
+    if not access_rule:
+        raise HTTPException(status_code=404, detail="Access rule not found")
+    stmt = delete(AccessRolesRule).where(AccessRolesRule.id == access_rule_id)
+    session.execute(stmt)
+    session.commit()
+    return True
+
+def read_all_business_elements():
+    stmt = select(BusinessElement)
+    business_elements = session.execute(stmt).scalars().all()
+    return business_elements
 
 def initial_db_population():
     with Session(engine) as session:
@@ -157,19 +206,19 @@ def initial_db_population():
         admin_user = User(
             name='Ivan',
             email="admin@example.com", 
-            hashed_password="secure_admin_hash", 
+            hashed_password=encrypt_pass('1'), 
             role=admin_role
         )
         simple_user1 = User(
             name='Fedor',
-            email="user@example.com", 
-            hashed_password="secure_user_hash", 
+            email="user1@example.com", 
+            hashed_password=encrypt_pass('1'), 
             role=user_role
         )
         simple_user2 = User(
-            name='Fedor',
-            email="user@example.com", 
-            hashed_password="secure_user_hash", 
+            name='Vasiliy',
+            email="user2@example.com", 
+            hashed_password=encrypt_pass('1'),  
             role=user_role
         )
         session.add_all([admin_user, simple_user1, simple_user2])
@@ -189,7 +238,7 @@ def initial_db_population():
         role_be = BusinessElement(name="Role Management")
         permission_be = BusinessElement(name="Access Management")
 
-        session.add([user_be, order_be, role_be, permission_be])
+        session.add_all([user_be, order_be, role_be, permission_be])
         session.flush()
 
         # create Access Rules (Write Access for Admin on User Management)
@@ -201,19 +250,16 @@ def initial_db_population():
             update_permission=True,
             delete_permission=True,
         )
-        admin_rule = AccessRolesRule(
-            role=admin_role,
-            business_element=user_be,
+        order_rule = AccessRolesRule(
+            role=user_role,
+            business_element=order_be,
             read_permission=True,
             create_permission=True,
             update_permission=True,
             delete_permission=True,
-            read_all_permission=True,
-            update_all_permission=True,
-            delete_all_permission=True,
         )
         
-        session.add_all([user_rule, admin_rule])
+        session.add_all([user_rule, order_rule])
 
         # Final Commit
         session.commit()

@@ -1,4 +1,4 @@
-from typing import Annotated
+from typing import Annotated, Optional
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi import FastAPI, Depends, Request
 from fastapi import HTTPException, status
@@ -8,7 +8,8 @@ from .tokenization import encode_token, decode_token
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
-BUSINESS_ELEMENTS_ADMIN_ONLY_ACCESS = ['Role Management', 'Access Management']
+BUSINESS_ELEMENTS_ADMIN_ONLY_ACCESS = ['Role Management', 'Access Management', "Business Element Management"]
+NON_ADMIN_CREATE_ELEMENTS = ['Order Management']
 
 # Если по входящему запросу не удается определить залогиненного пользователя, выдается ошибка 401. 
 # Если пользователь определен, но запрашиваемый ресурс ему не доступен 403 ошибка — Forbidden. 
@@ -30,7 +31,7 @@ class RoleChecker:
             self, 
             business_element_name: str, 
             permission_type: str, 
-            model: type[Base],
+            model: Optional[type[Base]] = None,
             ):
         self.element_name = business_element_name  # to which resource we check access (User Management, Order Management, ...)
         self.permission_type = permission_type # read, update, delete
@@ -46,12 +47,14 @@ class RoleChecker:
             current_user: Annotated[User, Depends(get_current_active_user)],
             ):
         
-        # check business_elements with admin-only access
+        # admin has FULL access
+        print(current_user.role.name)
+        if current_user.role.name == 'admin':
+            return current_user
+
+        # non-admin users has no access to these elements
         if self.element_name in BUSINESS_ELEMENTS_ADMIN_ONLY_ACCESS:
-            if current_user.role == 'admin':
-                return current_user
-            else:
-                raise self.access_denied_exception
+            raise self.access_denied_exception
             
         # check access_roles_rules
         rules = current_user.role.access_roles_rules
@@ -70,21 +73,17 @@ class RoleChecker:
         if getattr(rule, f"{self.permission_type}_permission", False):
             # CASE: create (resource_id doesn't exist):
             if self.permission_type == "create":
-                # allow to create non-user users for admin only
-                if self.element_name == 'User Management' and current_user.role == 'admin':
-                    return current_user
-                # allow to create orders for any user
-                if self.element_name == 'Order Management':
-                    return current_user
-            
+                return current_user
+
             # CASE: read, update, delete (resource_id must exist)
             # check ownership here (e.g., order.owner_id)
             resource_id = request.path_params.get('id')
             if not resource_id:
                 raise HTTPException(status_code=400, detail=f"resourse_id not provided in request")
             
-            resource = session.get(self.model, resource_id)
-            if resource and getattr(resource, "owner_id", None) == current_user.id:
-                return current_user
+            if self.model:
+                resource = session.get(self.model, resource_id)
+                if resource and getattr(resource, "owner_id", None) == current_user.id:
+                    return current_user
 
         raise self.access_denied_exception
