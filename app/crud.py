@@ -3,10 +3,10 @@ from dotenv import load_dotenv
 import platform
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
-from sqlalchemy import select, update
+from sqlalchemy import select, update, delete
 from sqlalchemy.exc import IntegrityError
 from fastapi import HTTPException
-from .models import Base, User, Role, BusinessElement, AccessRolesRule
+from .models import Base, User, Order, Role, BusinessElement, AccessRolesRule
 from .encryption import encrypt_pass, check_encrypred_pass
 from .tokenization import encode_token
 
@@ -114,6 +114,38 @@ def delete_user(user_id):
     return True
 
 
+def create_order(description: str, owner_id: int):
+    return Order(description=description, owner_id=owner_id)
+
+def read_order(order_id):
+    stmt = select(Order).where(Order.id == order_id)
+    order = session.execute(stmt).scalars().first()
+    return order
+
+def update_order(order_data: dict):
+    order_id = order_data['id']
+    order = read_order(order_id)
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    for field, value in order_data.items():
+        setattr(order, field, value)
+    session.add(order)
+    session.commit()
+    session.refresh(order)
+    return order
+
+def delete_order(order_id):
+    order = read_order(order_id)
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    stmt = delete(Order).where(Order.id == order_id)
+    session.execute(stmt)
+    session.commit()
+    return True
+
+
+
+
 def initial_db_population():
     with Session(engine) as session:
         # create roles
@@ -128,18 +160,36 @@ def initial_db_population():
             hashed_password="secure_admin_hash", 
             role=admin_role
         )
-        simple_user = User(
+        simple_user1 = User(
             name='Fedor',
             email="user@example.com", 
             hashed_password="secure_user_hash", 
             role=user_role
         )
-        session.add_all([admin_user, simple_user])
+        simple_user2 = User(
+            name='Fedor',
+            email="user@example.com", 
+            hashed_password="secure_user_hash", 
+            role=user_role
+        )
+        session.add_all([admin_user, simple_user1, simple_user2])
+        session.flush()
+
+        order1 = Order(
+            description='order #1',
+            user=simple_user1)
+        order2 = Order(
+            description='order #2',
+            user=simple_user2)
+        session.add_all([order1, order2])
 
         # create Business Elements
         user_be = BusinessElement(name="User Management")
-        permission_be = BusinessElement(name="Permissions Management")
-        session.add([user_be, permission_be])
+        order_be = BusinessElement(name="Order Management")
+        role_be = BusinessElement(name="Role Management")
+        permission_be = BusinessElement(name="Access Management")
+
+        session.add([user_be, order_be, role_be, permission_be])
         session.flush()
 
         # create Access Rules (Write Access for Admin on User Management)

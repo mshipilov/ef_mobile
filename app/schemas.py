@@ -22,6 +22,9 @@ class UserUpdateBase(UserCreateBase):
     pswd: Optional[str] = None
     repeat_pswd: Optional[str] = Field(None, exclude=True)
 
+class UserCreateAdmin(UserCreateBase):
+    role_id: int
+
 class UserUpdateAdmin(UserUpdateBase):
     role_id: Optional[int] = None  # Admins can explicitly set the role
     
