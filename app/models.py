@@ -1,6 +1,4 @@
-
-
-from sqlalchemy import ForeignKey, String, Boolean, Table, Column
+from sqlalchemy import ForeignKey, String, Boolean, Table, Column, UniqueConstraint
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -52,6 +50,11 @@ class AccessRolesRule(Base):
     update_all_permission: Mapped[bool] = mapped_column(nullable=True)
     delete_permission: Mapped[bool] = mapped_column(nullable=True)
     delete_all_permission: Mapped[bool] = mapped_column(nullable=True)
+    # combination role_id + business_element_id must be unique
+    # because we take first row from access_roles_rule in RoleChecker
+    __table_args__ = (
+        UniqueConstraint("role_id", "business_element_id", name="uq_role_business_element"),
+    )
 
     role: Mapped["Role"] = relationship(back_populates="access_roles_rules")
     business_element: Mapped["BusinessElement"] = relationship(back_populates="access_roles_rules")
