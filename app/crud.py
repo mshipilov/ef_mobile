@@ -205,7 +205,14 @@ def read_all_business_elements():
     business_elements = session.execute(stmt).scalars().all()
     return business_elements
 
+def db_is_empty():
+    roles = read_roles()
+    if not roles:
+        return True
+
 def initial_db_population():
+    if not db_is_empty():
+        return
     with Session(engine) as session:
         # create roles
         admin_role = Role(name="admin")
