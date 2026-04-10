@@ -9,8 +9,8 @@ from .schemas import UserCreateBase, UserUpdateBase, UserCreateAdmin, UserUpdate
 from .schemas import OrderCreate, RoleCreate, AccessRuleCreate
 from .crud import session, create_user, read_user, update_user, delete_user
 from .crud import create_order, read_order, update_order, delete_order
-from .crud import create_role, read_role, delete_role
-from .crud import create_access_rule, read_access_rule, update_access_rule, delete_access_rule
+from .crud import create_role, read_roles, delete_role
+from .crud import create_access_rule, read_access_rules, update_access_rule, delete_access_rule
 from .crud import read_all_business_elements
 
 from .tokenization import encode_token, decode_token
@@ -43,13 +43,14 @@ def user_create(user_in: UserCreateBase):
 
     return create_user(user_data)
 
-# you must be admin to register other roles
+# you must be admin to register non-user roles
+# we have separate endpoint because of different schema (UserCreateBase vs UserCreateAdmin)
 @app.post("/admin/user", dependencies=[Depends(RoleChecker("User Management", "create", User))])
 def user_create_admin(user_in: UserCreateAdmin):
     user_data = user_in.model_dump()
     return create_user(user_data)
 
-@app.get("/profile/{id}", dependencies=[Depends(RoleChecker("User Management", "read", User))])
+@app.get("/user/{id}", dependencies=[Depends(RoleChecker("User Management", "read", User))])
 def user_read(id: int,):
     user = read_user(user_id=id)
     return user
@@ -66,6 +67,7 @@ def user_update(
     return {"message": f"User with id {updated_user.id} updated successfully"}
 
 # you must be admin to update user.role_id for any user
+# we have separate endpoint because of different schema (UserUpdateBase vs UserUpdateAdmin)
 @app.patch("/admin/user/{id}", dependencies=[Depends(RoleChecker("User Management", "update", User))])
 def admin_user_update(user_in: UserUpdateAdmin,):
     updated_user = update_user(user_in.model_dump(exclude_unset=True))
@@ -113,9 +115,9 @@ def role_create(
     ):
     return create_role(user_in.model_dump())
 
-@app.get("/admin/role/{id}", dependencies=[Depends(RoleChecker("Role Management", "read"))])
-def role_read(id: int):
-    return read_role(id)
+@app.get("/admin/roles", dependencies=[Depends(RoleChecker("Role Management", "read"))])
+def roles_read():
+    return read_roles()
 
 @app.delete("/admin/role/{id}", dependencies=[Depends(RoleChecker("Role Management", "delete"))])
 def role_delete(id: int,):
@@ -129,9 +131,9 @@ def access_rule_create(
     ):
     return create_access_rule(user_in.model_dump())
 
-@app.get("/admin/access_rule/{id}", dependencies=[Depends(RoleChecker("Access Management", "read"))])
-def access_rule_read(id: int):
-    return read_access_rule(id)
+@app.get("/admin/access_rules", dependencies=[Depends(RoleChecker("Access Management", "read"))])
+def access_rules_read():
+    return read_access_rules()
 
 @app.patch("/admin/access_rule/{id}", dependencies=[Depends(RoleChecker("Access Management", "update"))])
 def access_rule_update(

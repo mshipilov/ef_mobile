@@ -49,6 +49,11 @@ def read_role(role_id):
     role = session.execute(stmt).scalars().first()
     return role
 
+def read_roles():
+    stmt = select(Role)
+    roles = session.execute(stmt).scalars().all()
+    return roles
+
 def delete_role(role_id):
     role = read_role(role_id)
     if not role:
@@ -167,6 +172,11 @@ def read_access_rule(access_rule_id):
     stmt = select(AccessRolesRule).where(AccessRolesRule.id == access_rule_id)
     access_rule = session.execute(stmt).scalars().first()
     return access_rule
+
+def read_access_rules():
+    stmt = select(AccessRolesRule)
+    access_rules = session.execute(stmt).scalars().all()
+    return access_rules
 
 def update_access_rule(user_data: dict):
     access_rule_id = user_data['id']
